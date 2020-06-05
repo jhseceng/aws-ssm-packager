@@ -22,7 +22,7 @@ logger.setLevel(logging.INFO)
 def zipdir(path, ziph):
     """
     Generates zip file for each directory
-    :param path: 
+    :param path:
     :param ziph:
     :return:
     """

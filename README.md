@@ -48,6 +48,30 @@ Script execution
 3) Uploads the Zip files to a /falcon folder in the bucket.
 4) Creates the package in systems manager if the package does not currently exist otherwise exits.
 
+The falcon agent can then be installed via the systems manager console/cli/API
+
+Example API call
+
+```yaml
+        ssm_client = boto3.client('ssm', region_name=region)
+        response = ssm_client.send_command(
+            InstanceIds=instance_ids,
+            DocumentName=document_name,
+            TimeoutSeconds=300,
+            Comment='Install package',
+            Parameters=parameters
+        )
+
+        parameters = {
+            'action': [action],
+            'installationType': ['Uninstall and reinstall'],
+            'name': [package_name]
+            # 'version': ['']
+        }
+
+
+```
+[Boto3 SSM API reference](https://boto3.amazonaws.com/v1/documentation/api/latest/reference/services/ssm.html#SSM.Client.send_command)
 
 
 
