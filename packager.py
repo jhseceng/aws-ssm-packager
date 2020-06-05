@@ -20,18 +20,33 @@ logger.setLevel(logging.INFO)
 
 
 def zipdir(path, ziph):
+    """
+    Generates zip file for each directory
+    :param path: 
+    :param ziph:
+    :return:
+    """
     # ziph is zipfile handle
     for root, dirs, files in os.walk(path):
         for file in files:
             ziph.write(os.path.join(root, file))
 
 def create_zip_files(dirs):
+    """
+    :param dirs: List of dictionarys
+    :return: None
+    """
     for dir in dirs:
         zipf = zipfile.ZipFile(dir+'.zip', 'w', zipfile.ZIP_DEFLATED)
         zipdir(dir+'/', zipf)
     zipf.close()
 
 def get_digest(files):
+    """
+    Generate sha256 of hash
+    :param files:
+    :return:
+    """
     h = hashlib.sha256()
     hashes= []
     for file in files:
@@ -43,6 +58,12 @@ def get_digest(files):
     return hashes
 
 def generate_manifest(installer_list, hashes):
+    """
+    Generates the manifest.json file required to create the ssm document
+    :param installer_list: List containing key value pairs required to construct the file
+    :param hashes: list of dictionary items {filename : sha256hash}
+    :return:
+    """
     manifest_dict = {}
     try:
         manifest_dict.update(
@@ -95,6 +116,12 @@ def create_bucket(bucket_name, region):
     return True
 
 def bucket_exists(bucket_name,region):
+    """
+    Checks that the S3 bucket exists in the region
+    :param bucket_name: The name of the S3 bucket
+    :param region:
+    :return: True or False
+    """
     s3_client = boto3.client('s3',region_name=region)
     response = s3_client.list_buckets()
 
@@ -106,10 +133,13 @@ def bucket_exists(bucket_name,region):
     return False
 
 def createDocument(region, filepath, package_name):
-    # aws ssm create-document --name "Falcon-ohio" --content file://manifest.json --attachments \
-    # Key="SourceUrl", Values = "https://falcon-ssm-ohio.s3.us-east-2.amazonaws.com/falcon" \
-    # --version-name 1.0.1 \
-    # --document-type Package
+    """
+
+    :param region:
+    :param filepath: Path to the maniftest file in this case "manifest.json"
+    :param package_name: The name of the package in SSM
+    :return: True or False
+    """
 
     try:
         ssm_client = boto3.client('ssm', region_name=region)
@@ -130,8 +160,10 @@ def createDocument(region, filepath, package_name):
                 DocumentFormat='JSON'
             )
             print('Created ssm package {}:'.format(package_name))
+            return True
     except Exception as e:
         print('Error creating document {}'.format(e))
+        return False
 
 def upload_file(file_name, bucket, object_name=None):
     """Upload a file to an S3 bucket
@@ -156,6 +188,10 @@ def upload_file(file_name, bucket, object_name=None):
     return True
 
 def get_agent_list(filename):
+    """
+    :param filename: Name of te file
+    :return: Returns a dictionary containing required configuration data
+    """
     try:
         with open(filename, 'rb') as fh:
             json_data=json.loads(fh.read())
@@ -177,7 +213,6 @@ def main():
         files.append(installer['file'])
 
     folders_exist = all(item in dir_list for item in dirs)
-
     if not folders_exist:
         print('Check agent list file - Required directories do not exist')
         sys.exit(1)
@@ -194,7 +229,8 @@ def main():
     for file in files:
         s3name = '/falcon/'+file
         upload_file(file, s3bucket, s3name)
-    createDocument(region, "manifest.json", package_name)
+    if createDocument(region, "manifest.json", package_name):
+        print("Successfully created package")
 
 
 if __name__ == '__main__':
