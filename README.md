@@ -71,7 +71,7 @@ Example API call
 
 
 ```
-[Boto3 ssm send_command() API reference](https://boto3.amazonaws.com/v1/documentation/api/latest/reference/services/ssm.html#SSM.Client.send_command){:target="_blank"}
+[Boto3 ssm send_command() API reference](https://boto3.amazonaws.com/v1/documentation/api/latest/reference/services/ssm.html#SSM.Client.send_command)
 
 
 
