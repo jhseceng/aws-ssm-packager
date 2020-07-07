@@ -6,6 +6,9 @@ import boto3
 import logging
 import argparse
 import sys
+import time
+from os.path import basename
+from os.path import dirname
 from logging.handlers import RotatingFileHandler
 from botocore.exceptions import ClientError
 
@@ -31,15 +34,25 @@ def zipdir(path, ziph):
         for file in files:
             ziph.write(os.path.join(root, file))
 
-def create_zip_files(dirs):
-    """
-    :param dirs: List of dictionarys
-    :return: None
-    """
-    for dir in dirs:
-        zipf = zipfile.ZipFile(dir+'.zip', 'w', zipfile.ZIP_DEFLATED)
-        zipdir(dir+'/', zipf)
+# def create_zip_files(dirs):
+#     """
+#     :param dirs: List of dictionarys
+#     :return: None
+#     """
+#     for dir in dirs:
+#         zipf = zipfile.ZipFile(dir+'.zip', 'w', zipfile.ZIP_DEFLATED)
+#         zipdir(dir+'/', zipf)
+#     zipf.close()
+
+def create_zip_files(dir):
+    zipf = zipfile.ZipFile(dir + '.zip', 'w', zipfile.ZIP_DEFLATED)
+
+    for root, dirs, files in os.walk(dir + '/'):
+        for file in files:
+            file_path = os.path.join(root, file)
+            zipf.write(file_path, basename(file_path))
     zipf.close()
+
 
 def get_digest(files):
     """
@@ -122,13 +135,17 @@ def bucket_exists(bucket_name,region):
     :param region:
     :return: True or False
     """
-    s3_client = boto3.client('s3',region_name=region)
-    response = s3_client.list_buckets()
+    s3_client = boto3.client('s3', region_name=region,verify=False)
+    try:
+        response = s3_client.list_buckets()
+    except ClientError as e:
+        print('Error listing buckets {}'.format(e))
 
     # Output True if bucket exists
-    print('Bucket already exists:')
+
     for bucket in response['Buckets']:
         if bucket_name ==  bucket["Name"]:
+            print('Bucket already exists:')
             return True
     return False
 
@@ -142,6 +159,7 @@ def createDocument(region, filepath, package_name):
     """
 
     try:
+        start_time = time.time()
         ssm_client = boto3.client('ssm', region_name=region)
         with open(filepath) as openFile:
             documentContent = openFile.read()
@@ -151,7 +169,7 @@ def createDocument(region, filepath, package_name):
                     {
                         'Key': 'SourceUrl',
                         'Values': [
-                            'https://falcon-ssm-ohio.s3.us-east-2.amazonaws.com/falcon',
+                            'https://'+s3bucket+'.s3-'+region+'.amazonaws.com/falcon',
                         ]
                     },
                 ],
@@ -178,11 +196,20 @@ def upload_file(file_name, bucket, object_name=None):
         object_name = file_name
 
     # Upload the file
-    s3_client = boto3.client('s3', region)
+    s3_client = boto3.client('s3')
+
     try:
-        print('Uploaing file {}:'.format(file_name))
-        s3_client.upload_file(file_name, bucket, object_name)
-    except ClientError as e:
+        start_time = time.time()
+        print('Uploading file {}:'.format(file_name))
+        content = open(file_name, 'rb')
+        s3_client.put_object(
+            Bucket=bucket,
+            Key=object_name,
+            Body=content
+        )
+        print("Successfully finished uploading files to s3 bucket. Took {}s".format(
+            time.time() - start_time))
+    except Exception as e:
         print('Upload error {}'.format(e))
         return False
     return True
@@ -216,18 +243,16 @@ def main():
     if not folders_exist:
         print('Check agent list file - Required directories do not exist')
         sys.exit(1)
-
-
-
-    create_zip_files(dirs)
+    for dir in dirs:
+        create_zip_files(dir)
     hashes_list = get_digest(files)
     generate_manifest(installer_list, hashes_list)
 
     if not bucket_exists(s3bucket,region):
-        create_bucket(s3bucket, region)
-
+        if not create_bucket(s3bucket, region):
+            sys.exit(1)
     for file in files:
-        s3name = '/falcon/'+file
+        s3name = 'falcon/'+file
         upload_file(file, s3bucket, s3name)
     if createDocument(region, "manifest.json", package_name):
         print("Successfully created package")
